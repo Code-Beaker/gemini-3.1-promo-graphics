@@ -2,6 +2,8 @@
 
 A high-performance, frame-driven product launch film built entirely with a pure HTML5 Canvas and JavaScript animation architecture. Designed specifically for the Gemini 3.1 Pro brand identity, this piece executes precise cinematic pacing, fluid UI transitions, and custom visual effects without reliance on heavy external video editing suites.
 
+The prompt is taken from [Prompt Motion](https://prompt-motion.com/).
+
 ---
 
 ## Key Architectural & Visual Features
