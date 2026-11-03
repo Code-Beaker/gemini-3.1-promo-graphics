@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Gemini 3.1 Pro - Launch Film</title>
+    <style>
+      @import url("https://fonts.googleapis.com/css2?family=Google+Sans:wght@400;500;700&display=swap");
+
+      body {
+        margin: 0;
+        padding: 0;
+        background-color: #f5f5f7;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
+        overflow: hidden;
+        font-family: "Google Sans", sans-serif;
+      }
+
+      #filmContainer {
+        position: relative;
+        width: 100vmin;
+        height: 100vmin;
+        max-width: 1440px;
+        max-height: 1440px;
+        box-shadow: 0 20px 40px rgba(0, 0, 0, 0.1);
+        background: #ffffff;
+        border-radius: 12px;
+        overflow: hidden;
+      }
+
+      canvas {
+        display: block;
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+      }
+
+      #controls {
+        position: absolute;
+        bottom: 20px;
+        left: 50%;
+        transform: translateX(-50%);
+        display: flex;
+        gap: 12px;
+        z-index: 10;
+      }
+
+      button {
+        background: rgba(255, 255, 255, 0.8);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(255, 255, 255, 0.9);
+        color: #111214;
+        padding: 8px 16px;
+        border-radius: 20px;
+        font-family: "Google Sans", sans-serif;
+        font-weight: 500;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s ease;
+      }
+
+      button:hover {
+        background: #ffffff;
+        transform: translateY(-1px);
+      }
+
+      #progressBar {
+        position: absolute;
+        bottom: 0;
+        left: 0;
+        height: 4px;
+        background: linear-gradient(90deg, #2b3a67, #fde74c, #fc7753);
+        width: 0%;
+        z-index: 10;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="filmContainer">
+      <canvas id="stage" width="1440" height="1440"></canvas>
+      <div id="progressBar"></div>
+      <div id="controls">
+        <button id="playBtn">Play Film</button>
+        <button id="replayBtn" style="display: none">Replay</button>
+      </div>
+    </div>
+
+    <script>
+      const canvas = document.getElementById("stage");
+      const ctx = canvas.getContext("2d");
+      const progressBar = document.getElementById("progressBar");
+      const playBtn = document.getElementById("playBtn");
+      const replayBtn = document.getElementById("replayBtn");
+
+      // Configuration
+      const BRAND_COLORS = ["#2B3A67", "#FDE74C", "#FC7753"];
+      const INK = "#111214";
+      const DURATION = 27; // seconds
+
+      // State
+      let isPlaying = false;
+      let startTime = 0;
+      let currentTime = 0;
+      let animationFrameId;
+
+      // Assets
+      const images = {};
+      const imageSources = {
+        menu: "menu.png",
+        prompt: "prompt.png",
+        tools: "tools.png",
+        active: "active.png",
+        logo: "logo.png",
+      };
+
+      // Load images with fallback
+      Object.keys(imageSources).forEach((key) => {
+        const img = new Image();
+        img.src = imageSources[key];
+        img.onload = () => (images[key] = img);
+        img.onerror = () => {
+          // Create a colored fallback canvas if image is missing
+          const fb = document.createElement("canvas");
+          fb.width = 800;
+          fb.height = 400;
+          const fctx = fb.getContext("2d");
+          fctx.fillStyle = "#e8f0fe";
+          fctx.fillRect(0, 0, 800, 400);
+          fctx.fillStyle = BRAND_COLORS[0];
+          fctx.font = "30px 'Google Sans'";
+          fctx.textAlign = "center";
+          fctx.fillText(`[Asset: ${imageSources[key]}]`, 400, 200);
+          images[key] = fb;
+        };
+      });
+
+      // Synthetic timings mapped to 23 seconds
+      const scriptData = [
+        { w: "This", t: 1.0 },
+        { w: "is", t: 1.3 },
+        { w: "Gemini", t: 1.6 },
+        { w: "3.1", t: 1.9 },
+        { w: "Pro.", t: 2.2 },
+        { w: "An", t: 3.2 },
+        { w: "AI", t: 3.4 },
+        { w: "for", t: 3.6 },
+        { w: "everyone...", t: 3.8 },
+        { w: "built", t: 5.0 },
+        { w: "for", t: 5.3 },
+        { w: "everyday", t: 5.5 },
+        { w: "tasks.", t: 5.8 },
+        { w: "Generate", t: 7.2 },
+        { w: "in", t: 7.6 },
+        { w: "ANY", t: 7.8, gradient: true },
+        { w: "style.", t: 8.2 },
+        { w: "Give", t: 9.8 },
+        { w: "it", t: 10.0 },
+        { w: "a", t: 10.2 },
+        { w: "simple", t: 10.4 },
+        { w: "prompt", t: 10.7 },
+        { w: "-", t: 11.0 },
+        { w: "and", t: 11.3 },
+        { w: "it", t: 11.5 },
+        { w: "just...", t: 11.7 },
+        { w: "understands.", t: 12.2 },
+        { w: "The", t: 14.0 },
+        { w: "more", t: 14.2 },
+        { w: "you", t: 14.4 },
+        { w: "use", t: 14.6 },
+        { w: "it,", t: 14.8 },
+        { w: "the", t: 15.2 },
+        { w: "BETTER", t: 15.5, gradient: true },
+        { w: "it", t: 15.9 },
+        { w: "gets.", t: 16.2 },
+        { w: "Adjust", t: 17.5 },
+        { w: "its", t: 17.8 },
+        { w: "creativity.", t: 18.0 },
+        { w: "Its", t: 18.5 },
+        { w: "tone.", t: 18.7 },
+        { w: "Its", t: 19.2 },
+        { w: "format.", t: 19.4 },
+        { w: "Every", t: 20.5 },
+        { w: "response", t: 20.8 },
+        { w: "-", t: 21.0 },
+        { w: "exactly", t: 21.3 },
+        { w: "as", t: 21.5 },
+        { w: "you", t: 21.7 },
+        { w: "pictured", t: 21.9 },
+        { w: "it.", t: 22.2 },
+      ];
+
+      // Scenes definition
+      const scenes = [
+        { id: 1, start: 0, end: 4.5 },
+        { id: 2, start: 4.5, end: 6.8 },
+        { id: 3, start: 6.8, end: 9.5 },
+        { id: 4, start: 9.5, end: 13.5 },
+        { id: 5, start: 13.5, end: 17.0 },
+        { id: 6, start: 17.0, end: 20.0 },
+        { id: 7, start: 20.0, end: DURATION },
+      ];
+
+      // --- Core Render Utilities ---
+
+      // Ease in out function
+      function easeInOut(t) {
+        return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+      }
+      function clamp(val, min, max) {
+        return Math.max(min, Math.min(max, val));
+      }
+
+      // Get opacity based on fade duration
+      function getFadeOpacity(time, start, end, fadeDur = 0.3) {
+        if (time < start || time > end) return 0;
+        const inFade = clamp((time - start) / fadeDur, 0, 1);
+        const outFade = clamp((end - time) / fadeDur, 0, 1);
+        return inFade * outFade;
+      }
+
+      // Liquid glass with pastel aura
+      function drawLiquidGlass(ctx, x, y, w, h, radius, time) {
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, radius);
+        ctx.clip();
+
+        // Animated Pastel Aura
+        const grad = ctx.createLinearGradient(
+          x,
+          y + Math.sin(time) * 50,
+          x + w,
+          y + h + Math.cos(time) * 50,
+        );
+        grad.addColorStop(0, "#2B3A6715"); // Very faint
+        grad.addColorStop(0.5, "#FDE74C20");
+        grad.addColorStop(1, "#FC775315");
+        ctx.fillStyle = grad;
+        ctx.fillRect(x, y, w, h);
+
+        // Frost Body
+        ctx.fillStyle = "rgba(255, 255, 255, 0.6)";
+        ctx.fill();
+
+        // Top Sheen
+        const sheen = ctx.createLinearGradient(x, y, x, y + h * 0.4);
+        sheen.addColorStop(0, "rgba(255, 255, 255, 0.9)");
+        sheen.addColorStop(1, "rgba(255, 255, 255, 0.0)");
+        ctx.fillStyle = sheen;
+        ctx.fill();
+        ctx.restore();
+
+        // Lift Shadow
+        ctx.save();
+        ctx.shadowColor = "rgba(0, 0, 0, 0.1)";
+        ctx.shadowBlur = 40;
+        ctx.shadowOffsetY = 20;
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, radius);
+        ctx.fillStyle = "rgba(0,0,0,0)";
+        ctx.fill();
+        ctx.restore();
+
+        // Bright Rim
+        ctx.save();
+        ctx.beginPath();
+        ctx.roundRect(x, y, w, h, radius);
+        ctx.strokeStyle = "rgba(255, 255, 255, 1)";
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+
+        // Inner rim soft
+        ctx.beginPath();
+        ctx.roundRect(x + 1, y + 1, w - 2, h - 2, radius - 1);
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+        ctx.lineWidth = 1;
+        ctx.stroke();
+        ctx.restore();
+      }
+
+      // Draws the continuous text captions
+      function drawCaptions(ctx, time, startLimit, endLimit) {
+        const activeWords = scriptData.filter(
+          (w) => w.t <= time && w.t >= startLimit && w.t < endLimit,
+        );
+        if (activeWords.length === 0) return;
+
+        const fontSize = 64;
+        ctx.font = `500 ${fontSize}px 'Google Sans'`;
+        ctx.textBaseline = "middle";
+
+        // Layout logic (simplified wrapping)
+        const maxWidth = 1000;
+        let lines = [[]];
+        let currentWidth = 0;
+
+        // Gather all words in this scene to calculate proper centering
+        const sceneWords = scriptData.filter(
+          (w) => w.t >= startLimit && w.t < endLimit,
+        );
+
+        sceneWords.forEach((wordObj) => {
+          const metrics = ctx.measureText(wordObj.w + " ");
+          if (currentWidth + metrics.width > maxWidth) {
+            lines.push([wordObj]);
+            currentWidth = metrics.width;
+          } else {
+            lines[lines.length - 1].push(wordObj);
+            currentWidth += metrics.width;
+          }
+        });
+
+        // Calculate total block height
+        const lineHeight = fontSize * 1.3;
+        const totalHeight = lines.length * lineHeight;
+        let startY = 1440 / 2 - totalHeight / 2 + fontSize / 2;
+
+        // Draw active words
+        lines.forEach((line, i) => {
+          let lineWidth = line.reduce(
+            (sum, w) => sum + ctx.measureText(w.w + " ").width,
+            0,
+          );
+          let startX = 1440 / 2 - lineWidth / 2;
+
+          line.forEach((wordObj) => {
+            const textStr = wordObj.w + " ";
+            const tWidth = ctx.measureText(textStr).width;
+
+            if (wordObj.t <= time) {
+              // Pop-in animation
+              const wordAge = time - wordObj.t;
+              const wordScale = clamp(wordAge * 5, 0.8, 1.0); // Quick pop
+              const wordOpacity = clamp(wordAge * 5, 0, 1);
+
+              ctx.save();
+              ctx.translate(startX + tWidth / 2, startY + i * lineHeight);
+              ctx.scale(wordScale, wordScale);
+              ctx.globalAlpha = wordOpacity;
+
+              if (wordObj.gradient) {
+                // Faint glow
+                ctx.shadowColor = BRAND_COLORS[1];
+                ctx.shadowBlur = 20;
+
+                const grad = ctx.createLinearGradient(
+                  -tWidth / 2,
+                  -fontSize / 2,
+                  tWidth / 2,
+                  fontSize / 2,
+                );
+                grad.addColorStop(0, BRAND_COLORS[0]);
+                grad.addColorStop(0.5, BRAND_COLORS[1]);
+                grad.addColorStop(1, BRAND_COLORS[2]);
+                ctx.fillStyle = grad;
+                ctx.fillText(wordObj.w, -tWidth / 2, 0);
+              } else {
+                ctx.fillStyle = INK;
+                ctx.shadowColor = "transparent";
+                ctx.fillText(wordObj.w, -tWidth / 2, 0);
+              }
+              ctx.restore();
+            }
+            startX += tWidth;
+          });
+        });
+      }
+
+      // --- Main Render Loop ---
+      function render(time) {
+        // Background
+        ctx.fillStyle = "#ffffff";
+        ctx.fillRect(0, 0, 1440, 1440);
+
+        // Continuous Camera Drift
+        const globalZoom = 1.0 + (time / DURATION) * (scenes.length * 0.04);
+        ctx.save();
+        ctx.translate(720, 720);
+        ctx.scale(globalZoom, globalZoom);
+        ctx.translate(-720, -720);
+
+        // Determine active scene
+        const activeScene = scenes.find((s) => time >= s.start && time < s.end);
+
+        if (activeScene) {
+          const sTime = time - activeScene.start;
+          const opacity = getFadeOpacity(
+            time,
+            activeScene.start,
+            activeScene.end,
+          );
+          ctx.globalAlpha = opacity;
+
+          // --- Scene 1: Drift Collage ---
+          if (activeScene.id === 1) {
+            if (images.menu) {
+              ctx.save();
+              ctx.globalAlpha = opacity * 0.4;
+              ctx.translate(
+                720 + Math.sin(time) * 50,
+                720 + Math.cos(time) * 30,
+              );
+              ctx.scale(1.2, 1.2);
+              ctx.drawImage(
+                images.menu,
+                -images.menu.width / 2,
+                -images.menu.height / 2,
+              );
+              ctx.restore();
+            }
+          }
+
+          // --- Scene 2: 16th Note Flashes ---
+          else if (activeScene.id === 2) {
+            const keys = Object.keys(images);
+            // 120BPM = 0.5s per beat, 16th note = 0.125s
+            const imgIndex = Math.floor(sTime / 0.125) % keys.length;
+            const img = images[keys[imgIndex]];
+
+            if (img) {
+              ctx.save();
+              const scale = 1440 / Math.max(img.width, img.height);
+              ctx.translate(720, 720);
+              ctx.scale(scale * 1.1, scale * 1.1);
+              ctx.globalAlpha = opacity * 0.7; // dim slightly for text
+              ctx.drawImage(img, -img.width / 2, -img.height / 2);
+              ctx.restore();
+            }
+
+            // Glass background for text readability
+            drawLiquidGlass(ctx, 200, 600, 1040, 240, 40, time);
+          }
+
+          // --- Scene 3: Glass Prompt Bar ---
+          else if (activeScene.id === 3) {
+            // Result changing on 16ths
+            if (images.active && images.tools) {
+              const img =
+                Math.floor(sTime / 0.125) % 2 === 0
+                  ? images.active
+                  : images.tools;
+              ctx.drawImage(
+                img,
+                720 - img.width / 2,
+                400,
+                img.width,
+                img.height,
+              );
+            }
+
+            // Glass Prompt Bar
+            const barW = 1000;
+            const barH = 120;
+            drawLiquidGlass(ctx, 720 - barW / 2, 900, barW, barH, 60, time);
+
+            ctx.font = "40px 'Google Sans'";
+            ctx.fillStyle = INK;
+            ctx.textAlign = "left";
+            ctx.textBaseline = "middle";
+
+            // Typing effect
+            const promptText =
+              "Generate a futuristic cityscape in neon colors...";
+            const charCount = Math.floor(
+              clamp((sTime - 0.5) * 40, 0, promptText.length),
+            );
+            ctx.fillText(
+              promptText.substring(0, charCount),
+              720 - barW / 2 + 60,
+              900 + barH / 2,
+            );
+          }
+
+          // --- Scene 4: Grid Layout ---
+          else if (activeScene.id === 4) {
+            const keys = Object.keys(images);
+            const positions = [
+              { x: 400, y: 400 },
+              { x: 1040, y: 400 },
+              { x: 400, y: 1040 },
+              { x: 1040, y: 1040 },
+            ];
+
+            keys.forEach((key, i) => {
+              // Prevent out-of-bounds error for the 5th image (logo)
+              if (i >= positions.length) return;
+
+              const img = images[key];
+              if (!img) return;
+
+              // Fly in logic
+              const delay = i * 0.2;
+              const progress = clamp((sTime - delay) / 0.8, 0, 1);
+              const easeProgress = easeInOut(progress);
+
+              const currentX = 720 + (positions[i].x - 720) * easeProgress;
+              const currentY = 720 + (positions[i].y - 720) * easeProgress;
+
+              ctx.save();
+              ctx.translate(currentX, currentY);
+              ctx.scale(easeProgress * 0.6, easeProgress * 0.6);
+              // Subtle rotation
+              ctx.rotate(((1 - easeProgress) * Math.PI) / 4);
+
+              ctx.shadowColor = "rgba(0,0,0,0.2)";
+              ctx.shadowBlur = 30;
+
+              // Mask as rounded rect
+              ctx.beginPath();
+              ctx.roundRect(
+                -img.width / 2,
+                -img.height / 2,
+                img.width,
+                img.height,
+                40,
+              );
+              ctx.clip();
+              ctx.drawImage(img, -img.width / 2, -img.height / 2);
+              ctx.restore();
+            });
+
+            // Glass Pill for Text
+            drawLiquidGlass(ctx, 720 - 450, 720 - 100, 900, 200, 100, time);
+          }
+
+          // --- Scene 5: Typography Focus ---
+          else if (activeScene.id === 5) {
+            // Minimal abstract background
+            const grad = ctx.createRadialGradient(720, 720, 0, 720, 720, 1000);
+            grad.addColorStop(0, "#ffffff");
+            grad.addColorStop(1, "#f0f2f5");
+            ctx.fillStyle = grad;
+            ctx.fillRect(0, 0, 1440, 1440);
+          }
+
+          // --- Scene 6: Glass Settings Panel ---
+          else if (activeScene.id === 6) {
+            const panelW = 800;
+            const panelH = 500;
+            drawLiquidGlass(
+              ctx,
+              720 - panelW / 2,
+              720 - panelH / 2 + 100,
+              panelW,
+              panelH,
+              40,
+              time,
+            );
+
+            // Sliders
+            const sliderY = [720, 820, 920];
+            const labels = ["Creativity", "Tone", "Format"];
+
+            sliderY.forEach((y, i) => {
+              const delay = i * 0.5;
+              // Slider animates back and forth
+              const val = (Math.sin(Math.max(0, sTime - delay) * 3) + 1) / 2;
+
+              ctx.fillStyle = INK;
+              ctx.font = "32px 'Google Sans'";
+              ctx.textAlign = "left";
+              ctx.textBaseline = "middle";
+              ctx.fillText(labels[i], 420, y);
+
+              // Track
+              ctx.fillStyle = "rgba(0,0,0,0.1)";
+              ctx.beginPath();
+              ctx.roundRect(650, y - 4, 300, 8, 4);
+              ctx.fill();
+
+              // Fill
+              const grad = ctx.createLinearGradient(650, 0, 950, 0);
+              grad.addColorStop(0, BRAND_COLORS[0]);
+              grad.addColorStop(1, BRAND_COLORS[2]);
+              ctx.fillStyle = grad;
+              ctx.beginPath();
+              ctx.roundRect(650, y - 4, 300 * val, 8, 4);
+              ctx.fill();
+
+              // Knob
+              ctx.fillStyle = "#ffffff";
+              ctx.shadowColor = "rgba(0,0,0,0.2)";
+              ctx.shadowBlur = 10;
+              ctx.beginPath();
+              ctx.arc(650 + 300 * val, y, 16, 0, Math.PI * 2);
+              ctx.fill();
+              ctx.shadowColor = "transparent";
+            });
+          }
+
+          // --- Scene 7: Outro / Logo Form ---
+          else if (activeScene.id === 7) {
+            // Burst particles (simplified as expanding circles)
+            if (sTime < 3) {
+              ctx.save();
+              ctx.translate(720, 720);
+              for (let i = 0; i < 20; i++) {
+                const angle = (i / 20) * Math.PI * 2 + time;
+                const dist = sTime * 1000 * Math.random();
+                ctx.globalAlpha = (1 - sTime / 3) * opacity;
+                ctx.fillStyle = BRAND_COLORS[i % 3];
+                ctx.beginPath();
+                ctx.arc(
+                  Math.cos(angle) * dist,
+                  Math.sin(angle) * dist,
+                  10 + Math.random() * 20,
+                  0,
+                  Math.PI * 2,
+                );
+                ctx.fill();
+              }
+              ctx.restore();
+            }
+
+            // Logo and Title Reveal (after 3s in scene)
+            if (sTime > 3) {
+              const logoFade = clamp((sTime - 3) * 2, 0, 1);
+              ctx.globalAlpha = logoFade * opacity;
+
+              // Gemini Logo Reveal
+              const lgScale = 1 + (sTime - 3) * 0.02;
+              ctx.save();
+              ctx.translate(720, 650);
+              ctx.scale(lgScale, lgScale);
+
+              if (images.logo) {
+                const tgtWidth = 600;
+                const tgtHeight =
+                  (images.logo.height / images.logo.width) * tgtWidth;
+                ctx.drawImage(
+                  images.logo,
+                  -tgtWidth / 2,
+                  -tgtHeight / 2,
+                  tgtWidth,
+                  tgtHeight,
+                );
+              }
+              ctx.restore();
+
+              // Title
+              ctx.font = "500 40px 'Google Sans'";
+              ctx.textAlign = "center";
+              ctx.fillStyle = "#666";
+              ctx.fillText("3.1 Pro", 720, 820);
+            }
+          }
+
+          ctx.globalAlpha = 1.0;
+
+          // Overlay text captions for the current scene
+          if (activeScene.id !== 7 || sTime < 3) {
+            // Hide script during logo reveal
+            drawCaptions(ctx, time, activeScene.start, activeScene.end);
+          }
+        }
+
+        ctx.restore(); // Restore global drift
+      }
+
+      // Loop engine
+      function loop(timestamp) {
+        if (!isPlaying) return;
+
+        currentTime = (Date.now() - startTime) / 1000;
+
+        // Update progress bar
+        progressBar.style.width = `${(currentTime / DURATION) * 100}%`;
+
+        if (currentTime >= DURATION) {
+          isPlaying = false;
+          currentTime = DURATION;
+          render(DURATION);
+          playBtn.style.display = "none";
+          replayBtn.style.display = "block";
+          return;
+        }
+
+        render(currentTime);
+        animationFrameId = requestAnimationFrame(loop);
+      }
+
+      // Controls
+      playBtn.addEventListener("click", () => {
+        if (!isPlaying) {
+          isPlaying = true;
+          startTime = Date.now() - currentTime * 1000;
+          playBtn.style.display = "none";
+          replayBtn.style.display = "none";
+          loop();
+        }
+      });
+
+      replayBtn.addEventListener("click", () => {
+        currentTime = 0;
+        startTime = Date.now();
+        isPlaying = true;
+        playBtn.style.display = "none";
+        replayBtn.style.display = "none";
+        loop();
+      });
+
+      // Initial Render
+      render(0);
+    </script>
+  </body>
+</html>
